@@ -39,10 +39,7 @@ data class Event(
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        Looper.getMainLooper().setMessageLogging { println(it) }
-        println("Registering module")
         ServiceModule.extra += AndroidModule
-        println("Registered module")
     }
 }
 
