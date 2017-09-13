@@ -17,7 +17,7 @@ apply plugin: "kotlin-kapt"
 
 repositories {
     mavenCentral()
-    mavenLocal()
+    maven { url 'https://jitpack.io' }
 }
 
 android {
@@ -75,12 +75,11 @@ dependencies {
     compile 'com.fasterxml.jackson.core:jackson-core:2.9.0.pr4'
     compile 'com.google.guava:guava:23.0-android'
 
-    compile 'eu.metatools.kfunnels:rt:0.0.3-SNAPSHOT'
-    kapt 'eu.metatools.kfunnels:proc:0.0.3-SNAPSHOT'
+    compile 'com.github.lukashaertel.kfunnels:rt:0.0.4'
+    kapt 'com.github.lukashaertel.kfunnels:proc:0.0.4'
 
     compile 'com.android.support:multidex:1.0.1'
     compile 'com.android.support:appcompat-v7:26.0.0-alpha1'
-    compile 'com.android.support:recyclerview-v7:26.0.0-alpha1'
 }
 
 kapt {
