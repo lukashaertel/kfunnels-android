@@ -37,7 +37,7 @@ Then, the elements are prepared for observable deserialization using the previou
         }
 ```
 
-The arry adapter is set up to feed into the created (or recycled) view.
+The array adapter is set up to feed into the created (or recycled) view.
 
 ```kotlin
         // Make array adapter feeding into the thing
