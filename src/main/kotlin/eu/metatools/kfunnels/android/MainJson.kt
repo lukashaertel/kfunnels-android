@@ -9,19 +9,17 @@ import android.widget.ArrayAdapter
 import android.widget.ListView
 import android.widget.TextView
 import com.fasterxml.jackson.core.JsonFactory
-import eu.metatools.kfunnels.android.rx.ReceiverModule
-import eu.metatools.kfunnels.android.rx.stream
 import eu.metatools.kfunnels.base.ServiceModule
 import eu.metatools.kfunnels.base.std
-import eu.metatools.kfunnels.then
+import eu.metatools.kfunnels.read
 import eu.metatools.kfunnels.tools.json.JsonSource
 import eu.metatools.kfunnels.tools.json.JsonSourceConfig
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.schedulers.Schedulers
+import org.jetbrains.anko.doAsync
+import org.jetbrains.anko.uiThread
 import java.net.URL
+import kotlin.concurrent.thread
 
-
-class Main : AppCompatActivity() {
+class MainJson : AppCompatActivity() {
     /**
      * Lazy initializer for the list view.
      */
@@ -31,23 +29,11 @@ class Main : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Compose modules and add standards support.
-        val module = (ReceiverModule then ServiceModule).std
-
-        // Create an observable of events
-        val observable = module.stream<Event> {
-            // A new source is a JSON source for a parser on a URL, original labels are converted.
-            JsonSource(JsonFactory().createParser(URL("https://app.eurofurence.org/Api/v2/Events")),
-                    JsonSourceConfig.upperToLower)
-        }
-
-
         // Make array adapter feeding into the thing
         val arrayAdapter = object : ArrayAdapter<Event>(this, 0) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
                 val event = getItem(position)
-                val view = convertView ?: LayoutInflater
-                        .from(getContext())
+                val view = convertView ?: LayoutInflater.from(getContext())
                         .inflate(R.layout.event, parent, false);
                 val top by lazy { view.findViewById<TextView>(R.id.top) }
                 val bottom by lazy { view.findViewById<TextView>(R.id.bottom) }
@@ -64,18 +50,18 @@ class Main : AppCompatActivity() {
         // Assign data adapter
         dataOut.adapter = arrayAdapter
 
-        // Put some things in the adapter
-        observable
-                .subscribeOn(Schedulers.newThread())
-                .observeOn(AndroidSchedulers.mainThread())
-                .window(5)
-                .subscribe {
-                    // Use windowed feed so that dataset change is not announced too oftern
-                    it.subscribe(
-                            { arrayAdapter.add(it) },
-                            {},
-                            { arrayAdapter.notifyDataSetChanged() })
-                }
 
+        doAsync {
+            JsonFactory().createParser(URL("https://app.eurofurence.org/Api/v2/Events")).use {
+                JsonSource(it, JsonSourceConfig.upperToLower).let {
+                    ServiceModule.std.read<List<Event>>(it)
+                }
+            }.let { items ->
+                uiThread {
+                    arrayAdapter.addAll(items)
+                    arrayAdapter.notifyDataSetChanged()
+                }
+            }
+        }
     }
 }
