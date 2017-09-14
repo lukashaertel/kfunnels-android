@@ -52,7 +52,7 @@ class MainJson : AppCompatActivity() {
 
 
         doAsync {
-            JsonFactory().createParser(URL("https://app.eurofurence.org/Api/v2/Events")).use {
+            JsonFactory().createParser(URL(url)).use {
                 JsonSource(it, JsonSourceConfig.upperToLower).let {
                     ServiceModule.std.read<List<Event>>(it)
                 }

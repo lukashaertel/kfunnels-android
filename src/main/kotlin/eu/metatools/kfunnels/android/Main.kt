@@ -20,6 +20,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.schedulers.Schedulers
 import java.net.URL
 
+val url = "https://github.com/lukashaertel/kfunnels-android/raw/data/bigevents"
 
 class Main : AppCompatActivity() {
     /**
@@ -37,7 +38,7 @@ class Main : AppCompatActivity() {
         // Create an observable of events
         val observable = module.stream<Event> {
             // A new source is a JSON source for a parser on a URL, original labels are converted.
-            JsonSource(JsonFactory().createParser(URL("https://app.eurofurence.org/Api/v2/Events")),
+            JsonSource(JsonFactory().createParser(URL(url)),
                     JsonSourceConfig.upperToLower)
         }
 

@@ -88,7 +88,7 @@ class MainGson : AppCompatActivity() {
         // Assign data adapter
         dataOut.adapter = arrayAdapter
 
-        Fuel.get("https://app.eurofurence.org/Api/v2/Events")
+        Fuel.get(url)
                 .responseObject(EventGson.ListDeserializer) { _, _, r ->
                     r.fold({
                         runOnUiThread {
