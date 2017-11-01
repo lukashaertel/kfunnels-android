@@ -8,26 +8,10 @@
             android:name=".App"
             android:allowBackup="true"
             android:icon="@mipmap/ic_launcher"
-            android:theme="@style/Theme.AppCompat">
+            android:theme="@style/AppTheme">
         <activity
                 android:name=".Main"
                 android:label="kfunnels">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity>
-        <activity
-                android:name=".MainJson"
-                android:label="kfunnels json">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity>
-        <activity
-                android:name=".MainGson"
-                android:label="kfunnels gson">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

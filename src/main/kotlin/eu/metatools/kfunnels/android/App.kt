@@ -28,6 +28,27 @@ data class Event(
     override fun toString() = title ?: id
 }
 
+@Funnelable
+data class Image(
+        val lastChangeDateTimeUtc: String,
+        val id: String,
+        val internalReference: String?,
+        val width: Int,
+        val height: Int,
+        val sizeInBytes: Long,
+        val mimeType: String?,
+        val contentHashSha1: String?) {
+    override fun toString() = internalReference ?: id
+}
+
+@Funnelable
+data class Room(
+        val lastChangeDateTimeUtc: String,
+        val id: String,
+        val name: String?) {
+    override fun toString() = name ?: id
+}
+
 class App : Application() {
     override fun onCreate() {
         super.onCreate()

@@ -1,82 +1,273 @@
 package eu.metatools.kfunnels.android
 
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
-import android.view.LayoutInflater
+import android.support.v7.widget.LinearLayoutManager
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.ListView
-import android.widget.TextView
+import android.widget.GridLayout
+import android.widget.ImageView
 import com.fasterxml.jackson.core.JsonFactory
-import eu.metatools.kfunnels.android.rx.ReceiverModule
-import eu.metatools.kfunnels.android.rx.stream
+import com.google.common.util.concurrent.Futures
+import com.squareup.picasso.Picasso
 import eu.metatools.kfunnels.base.ServiceModule
 import eu.metatools.kfunnels.base.std
-import eu.metatools.kfunnels.then
+import eu.metatools.kfunnels.read
+import eu.metatools.kfunnels.tools.iraw
 import eu.metatools.kfunnels.tools.json.JsonSource
 import eu.metatools.kfunnels.tools.json.JsonSourceConfig
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.schedulers.Schedulers
+import org.jetbrains.anko.*
+import org.jetbrains.anko.cardview.v7.cardView
+import org.jetbrains.anko.recyclerview.v7.recyclerView
+import java.io.File
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.concurrent.scheduleAtFixedRate
 
-val url = "https://github.com/lukashaertel/kfunnels-android/raw/data/bigevents"
+/**
+ * The relevant information to display an event in the list.
+ */
+data class EventStub(val id: String,
+                     val title: String?,
+                     val subTitle: String?,
+                     val startDateTimeUTC: String?,
+                     val start: String?,
+                     val endDateTimeUTC: String?,
+                     val end: String?,
+                     val description: String?,
+                     val bannerImageId: String?,
+                     val conferenceRoomId: String?)
+
+/**
+ * Converts the event to a stub.
+ */
+fun Event.toStub() = EventStub(id, title, subTitle, startDateTimeUtc, startTime, endDateTimeUtc, endTime, description, bannerImageId, conferenceRoomId)
+
+fun View.gridLparams(
+        rowStart: Int = GridLayout.UNDEFINED,
+        rowSpan: Int = 1,
+        rowAlign: GridLayout.Alignment = GridLayout.BASELINE,
+        rowWeight: Float = 0.0f,
+        colStart: Int = GridLayout.UNDEFINED,
+        colSpan: Int = 1,
+        colAlign: GridLayout.Alignment = GridLayout.START,
+        colWeight: Float = 0.0f) {
+    layoutParams = GridLayout.LayoutParams(
+            GridLayout.spec(rowStart, rowSpan, rowAlign, rowWeight),
+            GridLayout.spec(colStart, colSpan, colAlign, colWeight))
+}
 
 class Main : AppCompatActivity() {
-    /**
-     * Lazy initializer for the list view.
-     */
-    val dataOut by lazy { findViewById(R.id.data_out) as ListView }
+    private val boot = Date().time
+    private val events by lazy { iraw(File(filesDir, "events"), Event::id) }
+    private val images by lazy { iraw(File(filesDir, "images"), Image::id) }
+    private val rooms by lazy { iraw(File(filesDir, "rooms"), Room::id) }
+
+    val eventAdapter = ListAutoAdapter(EventStub::title) {
+        frameLayout {
+
+            lparams(matchParent, wrapContent)
+
+            cardView {
+                layoutParams = ViewGroup.MarginLayoutParams(matchParent, wrapContent).apply {
+                    horizontalMargin = dip(8)
+                    verticalMargin = dip(4)
+                }
+
+                verticalLayout {
+                    layoutParams = ViewGroup.LayoutParams(matchParent, matchParent)
+
+                    imageView {
+                        // Cancel request for detached views
+                        reset {
+                            Picasso.with(ctx).cancelRequest(this)
+                        }
+
+                        layoutParams = ViewGroup.LayoutParams(matchParent, wrapContent)
+
+                        visibility = View.GONE
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+
+                        from { bannerImageId } into {
+                            // Cancel existing requests
+                            Picasso.with(ctx)
+                                    .cancelRequest(this)
+
+                            // Start new requests
+                            val image = if (it == null) null else images.find(it)
+                            if (image != null) {
+                                visibility = View.VISIBLE
+                                Picasso.with(ctx)
+                                        .load("https://app.eurofurence.org/Api/v2/Images/${image.id}/Content")
+                                        .into(this)
+                            } else {
+                                visibility = View.GONE
+                                setImageDrawable(null)
+                            }
+                        }
+                    }
+
+
+                    gridLayout {
+                        layoutParams = ViewGroup.LayoutParams(matchParent, matchParent)
+                        columnCount = 3
+                        padding = dip(8)
+
+
+                        textView {
+                            gridLparams(colSpan = 3)
+                            textSize = 18f
+                            textColor = Color.BLACK
+                            setTypeface(typeface, Typeface.BOLD)
+                            from { title } into { text = it }
+                        }
+
+                        textView {
+                            gridLparams(colSpan = 3)
+                            textSize = 12f
+                            from { subTitle } into { text = it }
+                        }
+
+
+                        textView {
+                            gridLparams(colWeight = 1f)
+                            textSize = 12f
+                            setTypeface(typeface, Typeface.ITALIC)
+                            from { start } into { text = it }
+                        }
+
+                        textView {
+                            gridLparams(colWeight = 1f)
+                            textSize = 12f
+                            setTypeface(typeface, Typeface.ITALIC)
+                            from { end } into { text = it }
+                        }
+
+                        textView {
+                            gridLparams(colWeight = 2f)
+                            textSize = 12f
+                            setTypeface(typeface, Typeface.ITALIC)
+                            from { conferenceRoomId } into {
+                                val room = if (it == null) null else rooms.find(it)
+                                text = room?.name
+                            }
+                        }
+                        textView {
+                            gridLparams(colSpan = 3)
+                            reset {
+                                (tag as? Timer)?.cancel()
+                                tag = null
+                            }
+                            from { startDateTimeUTC to endDateTimeUTC } into { (s, e) ->
+                                if (s != null || e != null) {
+                                    val timer = Timer()
+                                    tag = timer
+                                    timer.scheduleAtFixedRate(0L, 1000L) {
+                                        val dp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.US)
+                                        val now = dp.parse("2017-08-18T16:00:00.000Z").time + Date().time - boot
+                                        val start = dp.parse(s).time
+                                        val end = dp.parse(e).time
+                                        val fraction = (now - start).toDouble() / (end - start)
+                                        runOnUiThread {
+                                            if (fraction < 0)
+                                                text = "Starting in a bit"
+                                            else if (fraction < 1)
+                                                text = "Going on ${Math.round(fraction * 1000.0) / 10.0}%"
+                                            else
+                                                text = "Over"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
-        // Compose modules and add standards support.
-        val module = (ReceiverModule then ServiceModule).std
 
-        // Create an observable of events
-        val observable = module.stream<Event> {
-            // A new source is a JSON source for a parser on a URL, original labels are converted.
-            JsonSource(JsonFactory().createParser(URL(url)),
-                    JsonSourceConfig.upperToLower)
+        verticalLayout {
+            backgroundColor = Color.GRAY
+            lparams(matchParent, matchParent)
+            recyclerView {
+                layoutManager = LinearLayoutManager(ctx)
+                adapter = eventAdapter
+            }.lparams(matchParent, matchParent)
         }
 
-
-        // Make array adapter feeding into the thing
-        val arrayAdapter = object : ArrayAdapter<Event>(this, 0) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-                val event = getItem(position)
-                val view = convertView ?: LayoutInflater
-                        .from(getContext())
-                        .inflate(R.layout.event, parent, false);
-                val top by lazy { view.findViewById<TextView>(R.id.top) }
-                val bottom by lazy { view.findViewById<TextView>(R.id.bottom) }
-                val description by lazy { view.findViewById<TextView>(R.id.description) }
-
-                top.text = event.title
-                bottom.text = event.subTitle
-                description.text = event.description
-
-                return view
+        // Get supplemental data
+        val imagesFuture = if (!images.exists())
+            doAsync {
+                // Otherwise, load from API
+                val url = "https://app.eurofurence.org/Api/v2/Images"
+                val items = JsonFactory().createParser(URL(url)).use {
+                    ServiceModule.std.read<List<Image>>(JsonSource(it, JsonSourceConfig.upperToLower))
+                }
+                images.save(items)
             }
-        }
+        else
+            Futures.immediateFuture(Unit)
 
-        // Assign data adapter
-        dataOut.adapter = arrayAdapter
+        val roomsFuture = if (!rooms.exists())
+            doAsync {
+                // Otherwise, load from API
+                val url = "https://app.eurofurence.org/Api/v2/EventConferenceRooms"
+                val items = JsonFactory().createParser(URL(url)).use {
+                    ServiceModule.std.read<List<Room>>(JsonSource(it, JsonSourceConfig.upperToLower))
+                }
+                rooms.save(items)
+            }
+        else
+            Futures.immediateFuture(Unit)
 
-        // Put some things in the adapter
-        observable
-                .subscribeOn(Schedulers.newThread())
-                .observeOn(AndroidSchedulers.mainThread())
-                .window(5)
-                .subscribe {
-                    // Use windowed feed so that dataset change is not announced too oftern
-                    it.subscribe(
-                            { arrayAdapter.add(it) },
-                            {},
-                            { arrayAdapter.notifyDataSetChanged() })
+        // Wait for both
+        imagesFuture.get()
+        roomsFuture.get()
+
+        // Check if events are loaded
+        if (events.exists()) {
+            // If loaded, stream them into the adapter
+            events.stream()
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe {
+                        val p = eventAdapter.list.binarySearchBy(it.startDateTimeUtc) { it.startDateTimeUTC }
+                        if (p < 0) {
+                            eventAdapter.list.add(-p - 1, it.toStub())
+                            eventAdapter.notifyItemInserted(-p - 1)
+                        } else {
+                            eventAdapter.list.add(p + 1, it.toStub())
+                            eventAdapter.notifyItemInserted(p + 1)
+                        }
+                    }
+        } else {
+            doAsync {
+
+                // Otherwise, load from API
+                val url = "https://app.eurofurence.org/Api/v2/Events"
+                val items = JsonFactory().createParser(URL(url)).use {
+                    ServiceModule.std.read<List<Event>>(JsonSource(it, JsonSourceConfig.upperToLower))
                 }
 
+                // Add to the adapter
+                uiThread {
+                    // TODO: Assuming clear list
+                    eventAdapter.list.addAll(items.sortedBy { it.startDateTimeUtc }.map(Event::toStub))
+                    eventAdapter.notifyDataSetChanged()
+                }
+
+                // Also save to the store
+                events.save(items)
+            }
+        }
     }
 }
